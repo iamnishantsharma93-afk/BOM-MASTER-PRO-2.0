@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+server/.env
+server/.env.local
+server/src/*.json
+server/src/credentials.json
+server/src/token.json
+server/node_modules/
