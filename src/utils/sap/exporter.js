@@ -12,9 +12,9 @@ export const SAP_FIELDS = [
   { key: "Component", header: "Component" },
   { key: "Blank 01", header: "" },
   { key: "Blank 02", header: "" },
+  { key: "Blank 03", header: "" },
   { key: "Component Quantity", header: "Component Quantity" },
   { key: "UOM", header: "UOM" },
-  { key: "Blank 03", header: "" },
   { key: "Blank 04", header: "" },
   { key: "Blank 05", header: "" },
   { key: "Blank 06", header: "" },
@@ -41,6 +41,7 @@ export const SAP_FIELDS = [
   { key: "Blank 25", header: "" },
   { key: "Blank 26", header: "" },
   { key: "Blank 27", header: "" },
+  { key: "Blank 28", header: "" },
   { key: "Indicator: Bulk Material", header: "Indicator: Bulk Material" },
 ];
 

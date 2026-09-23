@@ -4,6 +4,7 @@ import {
   hasNativePicker,
   pickExcelFilesNative,
 } from "../utils/excelReader.js";
+import BomSearchSelect from "./BomSearchSelect.jsx";
 import {
   detectColumns,
   DEFAULT_FIELD_ALIASES,
@@ -64,6 +65,27 @@ export default function SapBomGenerator() {
     const rawRows = await readExcelFile(file);
     loadRows(rawRows, file.name);
     event.target.value = "";
+  };
+
+  const loadFromDatabase = async (model) => {
+    try {
+      const response = await fetch(
+        "http://localhost:3000/api/bom/rows?model=" +
+          encodeURIComponent(model)
+      );
+
+      const data = await response.json();
+
+      if (!data.success || !data.rows.length) {
+        alert("Is model ke liye data nahi mila.");
+        return;
+      }
+
+      loadRows(data.rows, model + " (AI Database)");
+    } catch (error) {
+      console.error("Database fetch error:", error);
+      alert("AI database se connect nahi ho paya.");
+    }
   };
 
   const updateColumnMap = (field, value) => {
@@ -138,6 +160,12 @@ export default function SapBomGenerator() {
           />
         )}
       </div>
+
+      <p className="hint" style={{ margin: "8px 0 4px" }}>
+        Or search from AI database:
+      </p>
+
+      <BomSearchSelect onSelectModel={loadFromDatabase} />
 
       {headers.length > 0 && (
         <>

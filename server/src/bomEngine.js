@@ -280,6 +280,41 @@ function addAlternateItem({ mainItemCode, models, newItem }) {
   return results;
 }
 
+function getAlternateReport() {
+  const rows = getRows();
+  const results = [];
+
+  const byModel = new Map();
+  rows.forEach((r) => {
+    const model = r["Model No."];
+    if (!byModel.has(model)) byModel.set(model, []);
+    byModel.get(model).push(r);
+  });
+
+  byModel.forEach((modelRows, model) => {
+    let currentMain = null;
+
+    modelRows.forEach((r) => {
+      const type = String(r["Alternate"] || "").trim().toLowerCase();
+
+      if (type.startsWith("main")) {
+        currentMain = r;
+      } else if (type.startsWith("alt") && currentMain) {
+        results.push({
+          model,
+          mainItemCode: currentMain["Item Code"],
+          mainPartName: currentMain["Part Name"],
+          altItemCode: r["Item Code"],
+          altPartName: r["Part Name"],
+          process: r["Process"],
+        });
+      }
+    });
+  });
+
+  return results;
+}
+
 function searchItemOccurrences(query, limit = 500) {
   const rows = getRows();
   const q = (query || "").toLowerCase().trim();
@@ -341,8 +376,41 @@ function getDistinctValues(field) {
   return [...new Set(rows.map((r) => r[field]).filter(Boolean))].sort();
 }
 
+function getAltMainMap() {
+  const rows = getRows();
+  const byModel = new Map();
+
+  rows.forEach((r) => {
+    const model = r["Model No."];
+    if (!byModel.has(model)) byModel.set(model, []);
+    byModel.get(model).push(r);
+  });
+
+  const altOf = new Map();
+  const mainOf = new Map();
+
+  byModel.forEach((modelRows) => {
+    let currentMain = null;
+
+    modelRows.forEach((r) => {
+      const type = String(r["Alternate"] || "").trim().toLowerCase();
+      const key = r["Model No."] + "|" + r["Item Code"];
+
+      if (type.startsWith("main")) {
+        currentMain = r;
+      } else if (type.startsWith("alt") && currentMain) {
+        altOf.set(currentMain["Model No."] + "|" + currentMain["Item Code"], r["Item Code"]);
+        mainOf.set(key, currentMain["Item Code"]);
+      }
+    });
+  });
+
+  return { altOf, mainOf };
+}
+
 function filterItems(filters, limit = 1000) {
   const rows = getRows();
+  const { altOf, mainOf } = getAltMainMap();
 
   const matches = rows.filter((row) => {
     if (filters.obu && !String(row["OBU"] || "").toLowerCase().includes(filters.obu.toLowerCase())) return false;
@@ -367,7 +435,14 @@ function filterItems(filters, limit = 1000) {
     return true;
   });
 
-  return matches.slice(0, limit);
+  const withAlt = matches.map((row) => {
+    const key = row["Model No."] + "|" + row["Item Code"];
+    const alt = altOf.get(key) || mainOf.get(key) || "";
+
+    return { ...row, __alt: alt };
+  });
+
+  return withAlt.slice(0, limit);
 }
 
-module.exports = { loadBomFiles, searchBom, searchBomList, searchModels, getRowsByModel, getLibrarySummary, deleteModel, searchItemOccurrences, getItemSuggestions, getDistinctValues, filterItems, addAlternateItem };
+module.exports = { loadBomFiles, searchBom, searchBomList, searchModels, getRowsByModel, getLibrarySummary, deleteModel, searchItemOccurrences, getItemSuggestions, getDistinctValues, filterItems, addAlternateItem, getAlternateReport, getAltMainMap};

@@ -140,6 +140,8 @@ function createWindow() {
 
     title: "BOM MASTER PRO V2.0",
 
+    icon: path.join(__dirname, "..", "build", "icon.ico"),
+
     // This color is only used during rendering.
     backgroundColor: "#f5f7fa",
 

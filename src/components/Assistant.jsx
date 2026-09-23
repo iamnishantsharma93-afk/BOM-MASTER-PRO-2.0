@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { incrementCounter } from "../utils/activityLog.js";
+import { incrementCounter, getCounter } from "../utils/activityLog.js";
+import { IS_PREMIUM } from "../config/edition.js";
+
+const FREE_CHAT_LIMIT = 5;
 
 const API_URL = "http://localhost:3000/api/chat";
 
@@ -14,6 +17,10 @@ export default function Assistant({ masterBOM = [], builtFiles = [] }) {
   const [loading, setLoading] = useState(false);
   const [online, setOnline] = useState(null);
   const bottomRef = useRef(null);
+    const [chatCount, setChatCount] = useState(
+    getCounter("bmp_free_chat_count")
+  );
+  const locked = !IS_PREMIUM && chatCount >= FREE_CHAT_LIMIT;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -37,6 +44,7 @@ export default function Assistant({ masterBOM = [], builtFiles = [] }) {
   const sendMessage = async () => {
     const text = input.trim();
     if (!text || loading) return;
+        if (locked) return;
 
     const nextMessages = [
       ...messages,
@@ -80,6 +88,12 @@ export default function Assistant({ masterBOM = [], builtFiles = [] }) {
       }
 
       setOnline(true);
+
+      if (!IS_PREMIUM) {
+        const n = incrementCounter("bmp_free_chat_count");
+        setChatCount(n);
+      }
+
       setMessages((prev) => [
         ...prev,
         {
@@ -127,6 +141,11 @@ export default function Assistant({ masterBOM = [], builtFiles = [] }) {
         <div className="assistant-head">
   
             <h2>🤖 Assistant</h2>
+            {!IS_PREMIUM && (
+              <p className="hint" style={{ margin: "2px 0 0" }}>
+                {Math.min(chatCount, FREE_CHAT_LIMIT)} of {FREE_CHAT_LIMIT} free chats used
+              </p>
+            )}
 
           <div className="assistant-head-actions">
             <span
@@ -193,18 +212,22 @@ export default function Assistant({ masterBOM = [], builtFiles = [] }) {
             onKeyDown={handleKeyDown}
             placeholder="Ask the assistant something..."
             rows={2}
-            disabled={loading}
+            disabled={loading || locked}
           />
 
           <button
             className="primary assistant-send"
             onClick={sendMessage}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || locked}
           >
             {loading ? "Sending..." : "Send"}
           </button>
         </div>
-
+        {locked && (
+          <p style={{ color: "#dc2626", fontWeight: 600, margin: "10px 0 0" }}>
+            🔒 Free chat limit reached. Upgrade to Premium for unlimited AI Assistant access.
+          </p>
+        )}
         <p className="assistant-note">
           Enter = Send • Shift + Enter = New line
         </p>

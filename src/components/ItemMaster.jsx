@@ -481,6 +481,7 @@ export default function ItemMaster() {
                   <th>Maker</th>
                   <th>OBU</th>
                   <th>Process</th>
+                  <th>Alt</th>
                 </tr>
               </thead>
 
@@ -498,6 +499,7 @@ export default function ItemMaster() {
                     <td>{r["Maker"]}</td>
                     <td>{r["OBU"]}</td>
                     <td>{r["Process"]}</td>
+                    <td>{r["__alt"] || "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -8,7 +8,7 @@ const { GoogleGenAI } = require("@google/genai");
 const { buildMemoryContext } = require("./memoryContext");
 const { extractMemory } = require("./memoryExtractor");
 const { updateMemory } = require("./memoryEngine");
-const { searchBomList, loadBomFiles, searchModels, getRowsByModel, getLibrarySummary, deleteModel, searchItemOccurrences, getItemSuggestions, getDistinctValues, filterItems, addAlternateItem } = require("./bomEngine");
+const { searchBomList, loadBomFiles, searchModels, getRowsByModel, getLibrarySummary, deleteModel, searchItemOccurrences, getItemSuggestions, getDistinctValues, filterItems, addAlternateItem, getAlternateReport} = require("./bomEngine");
 
 const app = express();
 const PORT = 3000;
@@ -260,6 +260,17 @@ app.post("/api/item/add-alternate", (req, res) => {
     console.error("❌ Add alternate error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+app.get("/api/report/alternates", (req, res) => {
+  const q = (req.query.q || "").toLowerCase().trim();
+  const all = getAlternateReport();
+
+  const filtered = q
+    ? all.filter((r) => r.mainItemCode.toLowerCase().includes(q))
+    : all;
+
+  res.json({ success: true, rows: filtered });
 });
 
 app.post("/api/bom/reindex", (req, res) => {

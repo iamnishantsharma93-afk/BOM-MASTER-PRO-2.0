@@ -31,6 +31,7 @@ import ResultTable from "./components/ResultTable.jsx";
 import MasterBom from "./components/MasterBom.jsx";
 import ItemMaster from "./components/ItemMaster.jsx";
 import ComingSoon from "./components/ComingSoon.jsx";
+import Reports from "./components/Reports.jsx";
 import SapBomGenerator from "./components/SapBomGenerator.jsx";
 import Settings from "./components/Settings.jsx";
 import Assistant from "./components/Assistant.jsx";
@@ -1409,12 +1410,7 @@ incrementCounter("bmp_counter_comparisons");
 
         {view === "sap" && <SapBomGenerator />}
 
-        {view === "reports" && (
-          <ComingSoon
-            title="📊 Reports"
-            desc="Coming soon."
-          />
-        )}
+        {view === "reports" && <Reports />}
 
         {view === "settings" && (
   <Settings
