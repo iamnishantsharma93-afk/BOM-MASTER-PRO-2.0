@@ -1,3 +1,5 @@
+import Icon from "./Icon.jsx";
+
 export default function Settings({
   darkMode,
   setDarkMode,
@@ -18,7 +20,7 @@ export default function Settings({
   return (
     <div className="settings-page">
       <div className="card">
-        <h2>⚙️ Settings</h2>
+        <h2 className="card-title-icon"><Icon name="settings" size={16} /> Settings</h2>
         <p className="hint">
           Manage BOM MASTER PRO application preferences.
         </p>

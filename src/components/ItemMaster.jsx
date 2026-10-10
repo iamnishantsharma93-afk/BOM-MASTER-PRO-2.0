@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 import { exportWorkbook } from "../utils/excelReader.js";
+import { apiGet, apiPost } from "../utils/api.js";
+import LoadingRows from "./LoadingRows.jsx";
+import PagedTable from "./PagedTable.jsx";
+import EmptyState from "./EmptyState.jsx";
 
 function FieldWithSuggestions({ label, value, setValue, options, onEnter }) {
   const [open, setOpen] = useState(false);
@@ -83,8 +87,7 @@ export default function ItemMaster() {
   const [altResultMsg, setAltResultMsg] = useState("");
 
   useEffect(() => {
-    fetch("http://localhost:3000/api/item/fields")
-      .then((res) => res.json())
+    apiGet("/api/item/fields")
       .then((data) => {
         if (data.success) {
           setFields({ obu: data.obu, process: data.process, maker: data.maker });
@@ -100,11 +103,10 @@ export default function ItemMaster() {
     }
 
     const timer = setTimeout(() => {
-      fetch(
-        "http://localhost:3000/api/item/suggestions?q=" +
+      apiGet(
+        "/api/item/suggestions?q=" +
           encodeURIComponent(itemCode)
       )
-        .then((res) => res.json())
         .then((data) => {
           if (data.success) {
             setItemSuggestions(data.suggestions);
@@ -130,11 +132,9 @@ export default function ItemMaster() {
       if (process.trim()) params.set("process", process.trim());
       if (maker.trim()) params.set("maker", maker.trim());
 
-      const res = await fetch(
-        "http://localhost:3000/api/item/filter?" + params.toString()
+      const data = await apiGet(
+        "/api/item/filter?" + params.toString()
       );
-
-      const data = await res.json();
 
       if (data.success) {
         setRows(data.rows);
@@ -187,11 +187,10 @@ export default function ItemMaster() {
     }
 
     const timer = setTimeout(() => {
-      fetch(
-        "http://localhost:3000/api/item/suggestions?q=" +
+      apiGet(
+        "/api/item/suggestions?q=" +
           encodeURIComponent(altMainCode)
       )
-        .then((res) => res.json())
         .then((data) => {
           if (data.success) setAltMainSuggestions(data.suggestions);
         })
@@ -208,10 +207,9 @@ export default function ItemMaster() {
     setAltResultMsg("");
 
     try {
-      const res = await fetch(
-        "http://localhost:3000/api/item/occurrences?q=" + encodeURIComponent(code)
+      const data = await apiGet(
+        "/api/item/occurrences?q=" + encodeURIComponent(code)
       );
-      const data = await res.json();
 
       if (data.success) {
         const models = [...new Set(
@@ -243,22 +241,16 @@ export default function ItemMaster() {
     setAltResultMsg("");
 
     try {
-      const res = await fetch("http://localhost:3000/api/item/add-alternate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mainItemCode: altMainCode,
-          models: altSelectedModels,
-          newItem: {
-            itemCode: altNewCode.trim(),
-            partName: altNewName,
-            spec: altNewSpec,
-            maker: altNewMaker,
-          },
-        }),
+      const data = await apiPost("/api/item/add-alternate", {
+        mainItemCode: altMainCode,
+        models: altSelectedModels,
+        newItem: {
+          itemCode: altNewCode.trim(),
+          partName: altNewName,
+          spec: altNewSpec,
+          maker: altNewMaker,
+        },
       });
-
-      const data = await res.json();
 
       if (data.success) {
         const okCount = data.results.filter((r) => r.ok).length;
@@ -449,7 +441,7 @@ export default function ItemMaster() {
         </div>
       </div>
 
-      {loading && <p className="hint">Searching...</p>}
+      {loading && <LoadingRows rows={6} />}
 
       {!loading && searched && rows.length > 0 && (
         <div className="card">
@@ -466,50 +458,30 @@ export default function ItemMaster() {
             <button className="primary" onClick={exportResults}>Export Results</button>
           </div>
 
-          <div className="tablewrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Model</th>
-                  <th>Item Code</th>
-                  <th>Part Name</th>
-                  <th>Part Spec</th>
-                  <th>Main/Alt</th>
-                  <th>QPS</th>
-                  <th>UOM</th>
-                  <th className="location-cell">Location</th>
-                  <th>Maker</th>
-                  <th>OBU</th>
-                  <th>Process</th>
-                  <th>Alt</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i}>
-                    <td><b>{r["Model No."]}</b></td>
-                    <td>{r["Item Code"]}</td>
-                    <td>{r["Part Name"]}</td>
-                    <td>{r["Part Description"]}</td>
-                    <td>{r["Alternate"]}</td>
-                    <td>{r["QPS"]}</td>
-                    <td>{r["UOM"]}</td>
-                    <td className="location-cell">{r["LOCATION"]}</td>
-                    <td>{r["Maker"]}</td>
-                    <td>{r["OBU"]}</td>
-                    <td>{r["Process"]}</td>
-                    <td>{r["__alt"] || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PagedTable
+            columns={[
+              { key: "model", label: "Model", render: (r) => <b>{r["Model No."]}</b> },
+              { key: "code", label: "Item Code", render: (r) => r["Item Code"] },
+              { key: "name", label: "Part Name", render: (r) => r["Part Name"] },
+              { key: "spec", label: "Part Spec", render: (r) => r["Part Description"] },
+              { key: "alt", label: "Main/Alt", render: (r) => r["Alternate"] },
+              { key: "qps", label: "QPS", render: (r) => r["QPS"] },
+              { key: "uom", label: "UOM", render: (r) => r["UOM"] },
+              { key: "loc", label: "Location", className: "location-cell", render: (r) => r["LOCATION"] },
+              { key: "maker", label: "Maker", render: (r) => r["Maker"] },
+              { key: "obu", label: "OBU", render: (r) => r["OBU"] },
+              { key: "process", label: "Process", render: (r) => r["Process"] },
+              { key: "alt2", label: "Alt", render: (r) => r["__alt"] || "—" },
+            ]}
+            rows={rows}
+            rowKey={(r, i) => i}
+            pageSize={50}
+          />
         </div>
       )}
 
       {!loading && searched && rows.length === 0 && (
-        <p className="hint">No matches found.</p>
+        <EmptyState compact icon="search" title="No matches found" desc="Try a different item code, name or model." />
       )}
     </div>
   );

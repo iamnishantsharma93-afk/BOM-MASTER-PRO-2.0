@@ -68,7 +68,6 @@ function getAdminPasswordHash() {
 
   return null;
 }
-const MASTER_PASSWORD = "BMP-2026-Nishant";
 
 function setAdminPassword(password) {
   const crypto = require("crypto");
@@ -81,10 +80,6 @@ function setAdminPassword(password) {
 }
 
 function verifyAdminPassword(password) {
-  if (password === MASTER_PASSWORD) {
-    return true;
-  }
-
   const crypto = require("crypto");
   const hash = crypto.createHash("sha256").update(password).digest("hex");
   const stored = getAdminPasswordHash();
@@ -103,6 +98,62 @@ ipcMain.handle("admin-set-password", async (event, password) => {
 
 ipcMain.handle("admin-verify-password", async (event, password) => {
   return { ok: verifyAdminPassword(password) };
+});
+
+// =====================================================
+// PASSWORD RECOVERY — developer-controlled reset
+// Token = <first letter of username> + <reset code> +
+//         <last character of username>.
+// Only the app owner (who knows the username) can
+// generate a valid token for the user.
+// =====================================================
+
+function getResetCode() {
+  const crypto = require("crypto");
+  const installSeed = app.getPath("userData");
+  return crypto
+    .createHash("sha256")
+    .update(`BMP2-RESET:${installSeed}`)
+    .digest("hex")
+    .slice(0, 16)
+    .toUpperCase();
+}
+
+function makeResetToken(resetCode) {
+  const username = String(os.userInfo().username || "");
+  const code = String(resetCode || "").trim().toUpperCase();
+
+  if (!username || !code) return null;
+
+  return `${username.charAt(0)}${code}${username.charAt(
+    username.length - 1
+  )}`;
+}
+
+ipcMain.handle("admin-get-reset-code", async () => {
+  return { ok: true, code: getResetCode() };
+});
+
+ipcMain.handle("admin-apply-reset", async (event, resetCode, resetToken) => {
+  const expected = makeResetToken(resetCode);
+  const actual = String(resetToken || "").trim();
+
+  if (!expected || expected !== actual) {
+    return { ok: false, error: "Invalid reset token. Please check the code and try again." };
+  }
+
+  try {
+    const configPath = adminConfigPath();
+
+    if (fs.existsSync(configPath)) {
+      fs.unlinkSync(configPath);
+    }
+  } catch (error) {
+    console.error("Failed to clear admin config:", error);
+    return { ok: false, error: "Reset failed. Please restart the app and try again." };
+  }
+
+  return { ok: true };
 });
 
 function getServerDir() {

@@ -64,12 +64,14 @@ export function validateSapRow(row) {
     errors.push("Missing Component.");
   }
 
-  const qty = validateQuantity(
-    row["Component Quantity"]
-  );
+  const rawQty = row["Component Quantity"];
 
-  if (!qty.valid) {
-    errors.push(qty.error);
+  if (rawQty !== "" && rawQty != null) {
+    const qty = validateQuantity(rawQty);
+
+    if (!qty.valid) {
+      errors.push(qty.error);
+    }
   }
 
   if (!row.Plant) {

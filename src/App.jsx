@@ -6,6 +6,7 @@ import {
   buildSummarySheet,
   buildFullUsageSheet,
   buildPartDetailSheet,
+  mapAiRowToMasterRow,
 } from "./utils/masterBomEngine.js";
 import {
   readExcelFile,
@@ -20,6 +21,7 @@ import {
   mapRows,
 } from "./utils/compareEngine.js";
 import { PARAMS, blankMap } from "./utils/helpers.js";
+import { apiGet, apiPost, apiDelete, apiHealth } from "./utils/api.js";
 import * as XLSX from "xlsx/dist/xlsx.full.min.js";
 import Header from "./components/Header.jsx";
 import Footer from "./components/Footer.jsx";
@@ -36,9 +38,18 @@ import SapBomGenerator from "./components/SapBomGenerator.jsx";
 import Settings from "./components/Settings.jsx";
 import Assistant from "./components/Assistant.jsx";
 import BomSearchSelect from "./components/BomSearchSelect.jsx";
-import { addActivity, clearActivity, incrementCounter, resetCounters } from "./utils/activityLog.js";
+import { useToast } from "./components/Toast.jsx";
+import {
+  addActivity,
+  clearActivity,
+  incrementCounter,
+  resetCounters,
+  setLastMasterBom,
+  setLastComparison,
+} from "./utils/activityLog.js";
 
 export default function App() {
+  const { toast, confirmDialog } = useToast();
   // =========================
   // PAGE / VIEW NAVIGATION
   // =========================
@@ -58,8 +69,7 @@ const [aiStorageMode, setAiStorageMode] = useState("local");
 const [bomSearchResetKey, setBomSearchResetKey] = useState(0);
 
 useEffect(() => {
-  fetch("http://localhost:3000/api/settings")
-    .then((res) => res.json())
+  apiGet("/api/settings")
     .then((data) => {
       if (data.success) {
         setAiDataDir(data.dataDir);
@@ -71,16 +81,10 @@ useEffect(() => {
 
 const saveAiSettings = async (newDataDir, newStorageMode) => {
   try {
-    const res = await fetch("http://localhost:3000/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        dataDir: newDataDir,
-        storageMode: newStorageMode,
-      }),
+    const data = await apiPost("/api/settings", {
+      dataDir: newDataDir,
+      storageMode: newStorageMode,
     });
-
-    const data = await res.json();
 
     if (data.success) {
       setAiDataDir(data.dataDir);
@@ -88,7 +92,7 @@ const saveAiSettings = async (newDataDir, newStorageMode) => {
     }
   } catch (error) {
     console.error("Settings save error:", error);
-    alert("AI backend se connect nahi ho paya. Check karo backend chal raha hai.");
+    toast.error("Could not connect to the AI backend. Make sure the backend is running.");
   }
 };
 
@@ -175,25 +179,11 @@ const changeAiStorageMode = (mode) => {
   const [masterSearch, setMasterSearch] = useState("");
   const [selectedPart, setSelectedPart] = useState(null);
 
-  // Maps a raw AI-database row (bomData.json shape)
-  // into the row shape Master BOM's build logic expects.
-  const mapAiRowToMasterRow = (row) => ({
-    partNo: String(row["Item Code(CPN)"] || row["Item Code"] || "").trim().toUpperCase(),
-    itemName: row["Part Name"] || "",
-    itemSpec: row["Part Description"] || "",
-    qps: row["QPS"] || "",
-    uom: row["UOM"] || "",
-    location: row["LOCATION"] || "",
-    maker: row["Maker"] || "",
-    mainAlt: row["Alternate"] || "",
-  });
-
   // Loads the Master BOM library from the AI database
   // (one entry per Model No., grouped from bomData.json).
   const refreshLibrary = async () => {
     try {
-      const res = await fetch("http://localhost:3000/api/bom/library", { cache: "no-store" });
-      const data = await res.json();
+      const data = await apiGet("/api/bom/library", { cache: "no-store" });
 
       if (data.success) {
         const sorted = data.library
@@ -228,15 +218,9 @@ const changeAiStorageMode = (mode) => {
 
       if (!files || !files.length) return;
 
-      const res = await fetch("http://localhost:3000/api/bom/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          files: files.map((f) => ({ name: f.name, base64: f.base64 })),
-        }),
+      const data = await apiPost("/api/bom/upload", {
+        files: files.map((f) => ({ name: f.name, base64: f.base64 })),
       });
-
-      const data = await res.json();
 
       if (data.success) {
         setReindexMessage(`${data.count} file(s) added successfully.`);
@@ -274,76 +258,64 @@ const changeAiStorageMode = (mode) => {
           })
       )
     )
-      .then((files) =>
-        fetch("http://localhost:3000/api/bom/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ files }),
-        })
-      )
-      .then((res) => res.json())
+      .then((files) => apiPost("/api/bom/upload", { files }))
       .then((data) => {
         if (data.success) {
-          alert(`${data.count} file(s) added successfully.`);
+          toast.success(`${data.count} file(s) added successfully.`);
           refreshLibrary();
         } else {
-          alert("Failed to add file(s): " + data.error);
+          toast.error("Failed to add file(s): " + data.error);
         }
       })
       .catch((error) => {
         console.error("Upload error:", error);
-        alert("Unable to upload file(s) to the AI database.");
+        toast.error("Unable to upload file(s) to the AI database.");
       });
 
     event.target.value = "";
   };
 
-  const [confirmPrompt, setConfirmPrompt] = useState(null);
-
-  const askConfirm = (message, onConfirm) => {
-    setConfirmPrompt({ message, onConfirm });
-  };
-
   // Deletes one model from the AI database.
-  const removeFromLibrary = (model) => {
-    askConfirm(`Delete model "${model}" from the database?`, async () => {
-      try {
-        const res = await fetch(
-          "http://localhost:3000/api/bom/model?model=" +
-            encodeURIComponent(model),
-          { method: "DELETE" }
-        );
+  const removeFromLibrary = async (model) => {
+    const ok = await confirmDialog(
+      `Delete model "${model}" from the database?`,
+      { title: "Delete Model", danger: true }
+    );
 
-        const data = await res.json();
+    if (!ok) return;
 
-        if (!data.success) {
-          setReindexMessage("Failed to delete: " + (data.error || "unknown error"));
-        }
-addActivity("🗑", "Model deleted", model);
-        await refreshLibrary();
-      } catch (error) {
-        console.error("Delete error:", error);
-        setReindexMessage("Unable to delete the model.");
+    try {
+      const data = await apiDelete(
+        "/api/bom/model?model=" + encodeURIComponent(model)
+      );
+
+      if (!data.success) {
+        setReindexMessage("Failed to delete: " + (data.error || "unknown error"));
       }
-    });
+
+      addActivity("🗑", "Model deleted", model);
+      await refreshLibrary();
+    } catch (error) {
+      console.error("Delete error:", error);
+      setReindexMessage("Unable to delete the model.");
+    }
   };
 
   // Deletes every source file currently in the library.
   const clearWholeLibrary = async () => {
-    const confirmClear = window.confirm(
-      "This permanently deletes EVERY BOM file in the AI database. Continue?"
+    const ok = await confirmDialog(
+      "This permanently deletes EVERY BOM file in the AI database. Continue?",
+      { title: "Clear Entire Library", danger: true }
     );
 
-    if (!confirmClear) return;
+    if (!ok) return;
 
     const uniqueFiles = [...new Set(bomLibrary.map((b) => b.name))];
 
     try {
       for (const fileName of uniqueFiles) {
-        await fetch(
-          "http://localhost:3000/api/bom/file?fileName=" +
-            encodeURIComponent(fileName),
-          { method: "DELETE" }
+        await apiDelete(
+          "/api/bom/file?fileName=" + encodeURIComponent(fileName)
         );
       }
 
@@ -358,12 +330,13 @@ addActivity("🗑", "Model deleted", model);
     setSelectedPart(null);
   };
 
-  const clearMasterBom = () => {
-    const confirmClear = window.confirm(
-      "Clear the current Master BOM? The BOM Library will not be deleted."
+  const clearMasterBom = async () => {
+    const ok = await confirmDialog(
+      "Clear the current Master BOM? The BOM Library will not be deleted.",
+      { title: "Clear Master BOM", danger: true }
     );
 
-    if (!confirmClear) return;
+    if (!ok) return;
 
     setMasterBOM([]);
     setBuiltFiles([]);
@@ -371,12 +344,12 @@ addActivity("🗑", "Model deleted", model);
     setSelectedPart(null);
   };
 
-  const resetSettings = () => {
-    const confirmReset = window.confirm(
+  const resetSettings = async () => {
+    const ok = await confirmDialog(
       "Reset all application settings to default?"
     );
 
-    if (!confirmReset) return;
+    if (!ok) return;
 
     setDarkMode(false);
     setAutoSizeColumns(true);
@@ -420,9 +393,7 @@ const resetDashboard = () => {
 
   const buildMasterBOM = async () => {
     if (!filteredLibrary.length) {
-      alert(
-        "No BOM matches the current filter. Adjust the filter first."
-      );
+      toast.info("No BOM matches the current filter. Adjust the filter first.");
 
       return;
     }
@@ -431,12 +402,9 @@ const resetDashboard = () => {
       const filesToBuild = [];
 
       for (const b of filteredLibrary) {
-        const res = await fetch(
-          "http://localhost:3000/api/bom/rows?model=" +
-            encodeURIComponent(b.model)
+        const data = await apiGet(
+          "/api/bom/rows?model=" + encodeURIComponent(b.model)
         );
-
-        const data = await res.json();
 
         if (!data.success) continue;
 
@@ -455,13 +423,21 @@ const resetDashboard = () => {
       const finalMaster = buildMasterBom(filesToBuild);
 
       setBuiltFiles(filesToBuild);
-      setMasterBOM(finalMaster);addActivity("▦", "Master BOM created", `${filesToBuild.length} BOM(s), ${finalMaster.length} parts`);
+      setMasterBOM(finalMaster);
+      addActivity("▦", "Master BOM created", `${filesToBuild.length} BOM(s), ${finalMaster.length} parts`);
+      setLastMasterBom({
+        parts: finalMaster.length,
+        boms: filesToBuild.length,
+        models: filesToBuild.map((f) => f.model),
+        time: Date.now(),
+      });
+      toast.success(`Master BOM built: ${finalMaster.length} parts from ${filesToBuild.length} BOM(s).`);
       setSelectedPart(null);
       setMasterSearch("");
     } catch (error) {
 
       console.error("Build error:", error);
-      alert("Failed to build Master BOM.");
+      toast.error("Failed to build Master BOM.");
     }
   };
 
@@ -508,7 +484,7 @@ const resetDashboard = () => {
   // =========================
   const exportMasterBOM = () => {
     if (!masterBOM.length) {
-      alert("Master BOM is empty.");
+      toast.info("Master BOM is empty.");
 
       return;
     }
@@ -552,7 +528,7 @@ const resetDashboard = () => {
           error
         );
 
-        alert(
+        toast.error(
           `Unable to read "${file.name}".\n\nError: ${error.message}`
         );
       });
@@ -592,7 +568,7 @@ const resetDashboard = () => {
         error
       );
 
-      alert(
+      toast.error(
         "Unable to open the file picker."
       );
     }
@@ -614,15 +590,12 @@ const removeFile = (number) => {
 
 const selectFromDatabase = async (number, model) => {
   try {
-    const response = await fetch(
-      "http://localhost:3000/api/bom/rows?model=" +
-        encodeURIComponent(model)
+    const data = await apiGet(
+      "/api/bom/rows?model=" + encodeURIComponent(model)
     );
 
-    const data = await response.json();
-
     if (!data.success || !data.rows.length) {
-      alert("Is model ke liye data nahi mila.");
+      toast.info("No data found for this model.");
       return;
     }
 
@@ -641,17 +614,13 @@ const selectFromDatabase = async (number, model) => {
     }
   } catch (error) {
     console.error("Database fetch error:", error);
-    alert("AI database se connect nahi ho paya.");
+    toast.error("Could not connect to the AI database.");
   }
 };
 
 const reindexBomData = async () => {
   try {
-    const response = await fetch("http://localhost:3000/api/bom/reindex", {
-      method: "POST",
-    });
-
-    const data = await response.json();
+    const data = await apiPost("/api/bom/reindex", {});
 
     if (data.success) {
       setReindexMessage(`Re-index complete. ${data.count} rows loaded.`);addActivity("⚙", "Database re-indexed", `${data.count} rows loaded`);
@@ -661,7 +630,7 @@ const reindexBomData = async () => {
     }
   } catch (error) {
     console.error("Reindex error:", error);
-    setReindexMessage("AI backend se connect nahi ho paya.");
+    setReindexMessage("Could not connect to the AI backend.");
   }
 };
 
@@ -678,9 +647,7 @@ useEffect(() => {
 const [backendOnline, setBackendOnline] = useState(null);
 
 useEffect(() => {
-  fetch("http://localhost:3000/")
-    .then((res) => setBackendOnline(res.ok))
-    .catch(() => setBackendOnline(false));
+  apiHealth().then(setBackendOnline);
 }, []);
 
 const [isAdmin, setIsAdmin] = useState(false);
@@ -1067,12 +1034,19 @@ const [isAdmin, setIsAdmin] = useState(false);
 
     setResults(out);
 
+    setLastComparison({
+      total: out.length,
+      changed: out.filter((r) => r.status !== "Same").length,
+      time: Date.now(),
+    });
+
     setFilter("All");
 
     setSearch("");
 
-addActivity("⌘", "BOM Comparison", `${out.length} parts compared`);
-incrementCounter("bmp_counter_comparisons");
+    addActivity("⌘", "BOM Comparison", `${out.length} parts compared`);
+    incrementCounter("bmp_counter_comparisons");
+    toast.success(`Comparison complete: ${out.length} parts compared.`);
     setBusy(false);
   };
 
@@ -1199,9 +1173,7 @@ incrementCounter("bmp_counter_comparisons");
     name
   ) => {
     if (!rows.length) {
-      alert(
-        "No data available to export."
-      );
+      toast.info("No data available to export.");
 
       return;
     }
@@ -1304,6 +1276,7 @@ incrementCounter("bmp_counter_comparisons");
         />
 
         <main>
+        <div key={view} className="view-enter">
         {view === "home" && (
           <Dashboard setView={setView} userName={userName} backendOnline={backendOnline} totalBomFiles={bomLibrary.length} />
         )}
@@ -1431,40 +1404,12 @@ incrementCounter("bmp_counter_comparisons");
     onResetDashboard={resetDashboard}
   />
 )}
+        </div>
         </main>
       </div>
 
       <Footer />
 
-      {confirmPrompt && (
-        <div
-          className="master-bom-modal-overlay"
-          onClick={() => setConfirmPrompt(null)}
-        >
-          <div
-            className="master-bom-modal"
-            style={{ maxWidth: 380 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p style={{ marginTop: 0 }}>{confirmPrompt.message}</p>
-
-            <div className="actions" style={{ margin: 0 }}>
-              <button
-                className="clear"
-                onClick={() => {
-                  confirmPrompt.onConfirm();
-                  setConfirmPrompt(null);
-                }}
-              >
-                Confirm
-              </button>
-              <button className="clear" onClick={() => setConfirmPrompt(null)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

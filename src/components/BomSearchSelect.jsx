@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiGet } from "../utils/api.js";
 
 export default function BomSearchSelect({ onSelectModel }) {
   const [query, setQuery] = useState("");
@@ -12,11 +13,7 @@ export default function BomSearchSelect({ onSelectModel }) {
     }
 
     const timer = setTimeout(() => {
-      fetch(
-        "http://localhost:3000/api/bom/models?q=" +
-          encodeURIComponent(query)
-      )
-        .then((res) => res.json())
+      apiGet("/api/bom/models?q=" + encodeURIComponent(query))
         .then((data) => {
           if (data.success) {
             setModels(data.models);

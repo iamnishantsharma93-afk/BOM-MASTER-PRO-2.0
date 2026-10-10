@@ -83,6 +83,20 @@ contextBridge.exposeInMainWorld(
           "admin-verify-password",
           password
         ),
+
+    adminGetResetCode:
+      () =>
+        ipcRenderer.invoke(
+          "admin-get-reset-code"
+        ),
+
+    adminApplyReset:
+      (code, token) =>
+        ipcRenderer.invoke(
+          "admin-apply-reset",
+          code,
+          token
+        ),
     masterBomListFiles:
       () =>
         ipcRenderer.invoke(

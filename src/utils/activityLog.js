@@ -44,6 +44,42 @@ export function getCounter(key) {
 export function resetCounters() {
   localStorage.removeItem("bmp_counter_comparisons");
   localStorage.removeItem("bmp_counter_ai_queries");
+  localStorage.removeItem("bmp_counter_sap_exports");
+}
+
+const LAST_MASTER_BOM_KEY = "bmp_last_master_bom";
+const LAST_COMPARISON_KEY = "bmp_last_comparison";
+
+export function setLastMasterBom(data) {
+  try {
+    localStorage.setItem(LAST_MASTER_BOM_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.error("Last Master BOM save error:", error);
+  }
+}
+
+export function getLastMasterBom() {
+  try {
+    return JSON.parse(localStorage.getItem(LAST_MASTER_BOM_KEY) || "null");
+  } catch (error) {
+    return null;
+  }
+}
+
+export function setLastComparison(data) {
+  try {
+    localStorage.setItem(LAST_COMPARISON_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.error("Last comparison save error:", error);
+  }
+}
+
+export function getLastComparison() {
+  try {
+    return JSON.parse(localStorage.getItem(LAST_COMPARISON_KEY) || "null");
+  } catch (error) {
+    return null;
+  }
 }
 
 export function formatTimeAgo(timestamp) {

@@ -4,6 +4,11 @@ import {
   hasNativePicker,
   pickExcelFilesNative,
 } from "../utils/excelReader.js";
+import { apiGet } from "../utils/api.js";
+import { incrementCounter } from "../utils/activityLog.js";
+import { useToast } from "./Toast.jsx";
+import Icon from "./Icon.jsx";
+import DropZone from "./DropZone.jsx";
 import BomSearchSelect from "./BomSearchSelect.jsx";
 import {
   detectColumns,
@@ -20,6 +25,7 @@ import {
 } from "../utils/sap/exporter.js";
 
 export default function SapBomGenerator() {
+  const { toast } = useToast();
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState([]);
   const [customerRows, setCustomerRows] = useState([]);
@@ -30,7 +36,7 @@ export default function SapBomGenerator() {
 
   const loadRows = (rawRows, name) => {
     if (!rawRows.length) {
-      alert(`"${name}" has no data rows.`);
+      toast.error(`"${name}" has no data rows.`);
       return;
     }
 
@@ -69,22 +75,19 @@ export default function SapBomGenerator() {
 
   const loadFromDatabase = async (model) => {
     try {
-      const response = await fetch(
-        "http://localhost:3000/api/bom/rows?model=" +
-          encodeURIComponent(model)
-      );
+      const data = await apiGet(
+      "/api/bom/rows?model=" + encodeURIComponent(model)
+    );
 
-      const data = await response.json();
-
-      if (!data.success || !data.rows.length) {
-        alert("Is model ke liye data nahi mila.");
-        return;
-      }
+    if (!data.success || !data.rows.length) {
+      toast.info("No data found for this model.");
+      return;
+    }
 
       loadRows(data.rows, model + " (AI Database)");
     } catch (error) {
       console.error("Database fetch error:", error);
-      alert("AI database se connect nahi ho paya.");
+      toast.error("Could not connect to the AI database.");
     }
   };
 
@@ -98,7 +101,7 @@ export default function SapBomGenerator() {
 
   const handleGenerate = () => {
     if (!customerRows.length) {
-      alert("Please upload a customer BOM file first.");
+      toast.info("Please upload a customer BOM file first.");
       return;
     }
 
@@ -114,7 +117,7 @@ export default function SapBomGenerator() {
     } catch (error) {
       setSapRows([]);
       setErrors([]);
-      alert(error.message);
+      toast.error(error.message);
     }
   };
 
@@ -130,26 +133,32 @@ export default function SapBomGenerator() {
 
   const handleExport = () => {
     if (!sapRows.length) {
-      alert("Nothing to export. Generate the SAP BOM first.");
+      toast.info("Nothing to export. Generate the SAP BOM first.");
       return;
     }
 
     exportSapWorkbook(sapRows, "SAP_BOM_Export.xlsx");
+    incrementCounter("bmp_counter_sap_exports");
+    toast.success(`${sapRows.length} SAP rows exported.`);
   };
 
   return (
     <section className="card">
-      <h2>⭐ SAP BOM Generator</h2>
+      <h2 className="card-title-icon"><Icon name="star" size={16} /> SAP BOM Generator</h2>
 
       <p className="hint">
         Upload a customer BOM (any column names) and
         convert it into an SAP-ready BOM.
       </p>
 
-      <div
+      <DropZone
         className="upload"
         onClick={hasNativePicker() ? handlePick : undefined}
+        onFiles={(files) =>
+          handlePickFallback({ target: { files, value: "" } })
+        }
       >
+        <span className="upload-icon"><Icon name="upload" size={18} /></span>
         <strong>Upload Customer BOM</strong>
         <span>{fileName || "Choose an Excel file"}</span>
         {!hasNativePicker() && (
@@ -159,7 +168,7 @@ export default function SapBomGenerator() {
             onChange={handlePickFallback}
           />
         )}
-      </div>
+      </DropZone>
 
       <p className="hint" style={{ margin: "8px 0 4px" }}>
         Or search from AI database:
@@ -269,6 +278,17 @@ export default function SapBomGenerator() {
                   }
                 />
               </div>
+
+              <div className="masterrow">
+                <b>BOM Order (Process Priority)</b>
+                <input
+                  value={config.processOrder}
+                  onChange={(e) =>
+                    updateConfig("processOrder", e.target.value)
+                  }
+                  placeholder="e.g. AI,SM,MI (empty = file order)"
+                />
+              </div>
             </div>
 
             <label className="check">
@@ -302,7 +322,7 @@ export default function SapBomGenerator() {
 
           <div className="actions">
             <button className="primary" onClick={handleGenerate}>
-              ⚙️ Generate SAP BOM
+              <Icon name="settings" size={14} /> Generate SAP BOM
             </button>
 
             <button onClick={handleExport}>

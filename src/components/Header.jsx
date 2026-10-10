@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Icon from "./Icon.jsx";
 
 export default function Header({ userName, isAdmin, onAdminToggle }) {
   const [showPrompt, setShowPrompt] = useState(false);
@@ -6,6 +7,10 @@ export default function Header({ userName, isAdmin, onAdminToggle }) {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [mode, setMode] = useState("verify");
   const [errorMsg, setErrorMsg] = useState("");
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [forgotMsg, setForgotMsg] = useState("");
 
   const openPrompt = async () => {
     if (isAdmin) {
@@ -51,28 +56,65 @@ export default function Header({ userName, isAdmin, onAdminToggle }) {
         setPassword("");
         setErrorMsg("");
       } else {
-        setErrorMsg("Incorrect master password.");
+        setErrorMsg("Incorrect password.");
       }
+    }
+  };
+
+  const openForgot = async () => {
+    setForgotOpen(true);
+    setResetToken("");
+    setForgotMsg("");
+
+    try {
+      const res = await window.electronAPI.adminGetResetCode();
+
+      if (res.ok) {
+        setResetCode(res.code);
+      } else {
+        setForgotMsg("Could not get the reset code. Please try again.");
+      }
+    } catch (error) {
+      setForgotMsg("Could not get the reset code. Please try again.");
+    }
+  };
+
+  const submitResetToken = async () => {
+    if (!resetToken.trim()) return;
+
+    const res = await window.electronAPI.adminApplyReset(
+      resetCode,
+      resetToken.trim()
+    );
+
+    if (res.ok) {
+      setMode("setup");
+      setPassword("");
+      setErrorMsg("");
+      setForgotOpen(false);
+      setForgotMsg("");
+    } else {
+      setForgotMsg(res.error || "Invalid reset token.");
     }
   };
 
   const titles = {
     verify: "Enter Admin Password",
     setup: "Set Admin Password",
-    reset: "Enter Master Password to Reset",
+    reset: "Enter Current Password to Reset",
   };
 
   return (
     <header className="topbar">
       <div className="brand-block">
-        <div className="brand-mark" aria-hidden="true">◆</div>
+        <div className="brand-mark" aria-hidden="true"><Icon name="bolt" size={21} strokeWidth={2} /></div>
         <div>
           <div className="brand">BOM MASTER <span>PRO</span></div>
           <div className="tag">Professional BOM Management <i>•</i> AI Powered <i>•</i> Smarter <i>•</i> Faster <i>•</i> Better</div>
         </div>
       </div>
       <div className="topbar-right">
-        <div className="top-icon">⌁</div>
+        <div className="top-icon"><Icon name="activity" size={17} /></div>
         <div
           className="profile"
           onClick={openPrompt}
@@ -96,42 +138,107 @@ export default function Header({ userName, isAdmin, onAdminToggle }) {
           >
             <h3 style={{ marginTop: 0 }}>{titles[mode]}</h3>
 
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submitPassword()}
-              placeholder={mode === "reset" ? "Master Admin Password" : "Password"}
-              autoFocus
-              style={{ width: "100%", padding: 10, marginBottom: 8 }}
-            />
+            {mode === "verify" && forgotOpen ? (
+              <>
+                <p style={{ fontSize: 12, color: "#334155", marginBottom: 6 }}>
+                  Forgot your password? Send this Reset Code to your administrator:
+                </p>
+                <code
+                  style={{
+                    display: "block",
+                    background: "#0b2948",
+                    color: "#7dd3fc",
+                    border: "1px solid #1d4a6e",
+                    padding: "10px 12px",
+                    borderRadius: 6,
+                    fontSize: 15,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    marginBottom: 8,
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {resetCode || "..."}
+                </code>
 
-            {errorMsg && (
-              <p style={{ color: "#dc2626", fontSize: 12, margin: "0 0 10px" }}>
-                {errorMsg}
-              </p>
-            )}
+                <input
+                  value={resetToken}
+                  onChange={(e) => setResetToken(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitResetToken()}
+                  placeholder="Reset Token (from administrator)"
+                  style={{ width: "100%", padding: 10, marginBottom: 8 }}
+                  autoFocus
+                />
 
-            <div className="actions" style={{ margin: 0 }}>
-              <button className="primary" onClick={submitPassword}>
-                {mode === "setup" ? "Set & Unlock" : mode === "reset" ? "Verify" : "Unlock"}
-              </button>
-              <button className="clear" onClick={() => setShowPrompt(false)}>
-                Cancel
-              </button>
-            </div>
+                {forgotMsg && (
+                  <p style={{ color: "#dc2626", fontSize: 12, margin: "0 0 10px" }}>
+                    {forgotMsg}
+                  </p>
+                )}
 
-            {mode === "verify" && (
-              <p
-                style={{ fontSize: 11, color: "#1267d7", cursor: "pointer", marginTop: 12 }}
-                onClick={() => {
-                  setMode("reset");
-                  setPassword("");
-                  setErrorMsg("");
-                }}
-              >
-                Forgot Password?
-              </p>
+                <div className="actions" style={{ margin: 0 }}>
+                  <button className="primary" onClick={submitResetToken}>
+                    Apply Reset
+                  </button>
+                  <button
+                    className="clear"
+                    onClick={() => {
+                      setForgotOpen(false);
+                      setForgotMsg("");
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submitPassword()}
+                  placeholder={mode === "reset" ? "Current Password" : "Password"}
+                  autoFocus
+                  style={{ width: "100%", padding: 10, marginBottom: 8 }}
+                />
+
+                {errorMsg && (
+                  <p style={{ color: "#dc2626", fontSize: 12, margin: "0 0 10px" }}>
+                    {errorMsg}
+                  </p>
+                )}
+
+                <div className="actions" style={{ margin: 0 }}>
+                  <button className="primary" onClick={submitPassword}>
+                    {mode === "setup" ? "Set & Unlock" : mode === "reset" ? "Verify" : "Unlock"}
+                  </button>
+                  <button className="clear" onClick={() => setShowPrompt(false)}>
+                    Cancel
+                  </button>
+                </div>
+
+                {mode === "verify" && (
+                  <>
+                    <p
+                      style={{ fontSize: 11, color: "#1267d7", cursor: "pointer", marginTop: 12 }}
+                      onClick={() => {
+                        setMode("reset");
+                        setPassword("");
+                        setErrorMsg("");
+                      }}
+                    >
+                      Reset Password
+                    </p>
+                    <p
+                      style={{ fontSize: 11, color: "#dc2626", cursor: "pointer", marginTop: 4 }}
+                      onClick={openForgot}
+                    >
+                      Forgot password?
+                    </p>
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>

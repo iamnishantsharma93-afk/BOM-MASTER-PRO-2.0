@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import BomLibraryFilter from "./BomLibraryFilter.jsx";
+import PagedTable from "./PagedTable.jsx";
+import DropZone from "./DropZone.jsx";
+import Icon from "./Icon.jsx";
+import EmptyState from "./EmptyState.jsx";
 
 export default function MasterBom({
   hasNativePicker,
@@ -35,6 +39,30 @@ export default function MasterBom({
     0
   );
 
+  const masterColumns = useMemo(
+    () => [
+      {
+        key: "partNo",
+        label: "Part Number",
+        render: (item) => <b>{item.partNo}</b>,
+      },
+      { key: "itemName", label: "Item Name", render: (item) => item.itemName },
+      { key: "maker", label: "Maker", render: (item) => item.maker },
+      {
+        key: "related",
+        label: "Main/Alt Relation",
+        render: (item) => item.relatedLabel,
+      },
+      ...builtFiles.map((mf) => ({
+        key: mf.id,
+        label: `QPS ${mf.model}`,
+        render: (item) =>
+          item.usage.find((u) => u.fileId === mf.id)?.qps || "0",
+      })),
+    ],
+    [builtFiles]
+  );
+
   const handleBuild = async () => {
     if (!filteredLibrary.length) {
       buildMasterBOM();
@@ -50,7 +78,7 @@ export default function MasterBom({
       <div className="master-bom-layout">
         <aside className="card master-bom-side">
           <BomLibraryFilter
-            label={`📚 BOM Library (${bomLibrary.length})`}
+            label={`BOM Library (${bomLibrary.length})`}
             models={libraryModels}
             mode={libraryFilterMode}
             setMode={setLibraryFilterMode}
@@ -62,9 +90,7 @@ export default function MasterBom({
 
           <div className="master-bom-list">
             {filteredLibrary.length === 0 ? (
-              <p className="hint">
-                No BOM files match. Add a file or clear the filter.
-              </p>
+              <EmptyState compact icon="layers" title="No BOM files" desc="Add a file or clear the filter to get started." />
             ) : (
               filteredLibrary.map((b) => (
                 <div className="master-bom-list-item" key={b.id}>
@@ -107,7 +133,7 @@ export default function MasterBom({
 
           <div className="actions">
             <button className="primary" onClick={handleBuild}>
-              ⚙️ Build Master BOM
+              <Icon name="settings" size={14} /> Build Master BOM
             </button>
 
             {masterBOM.length > 0 && (
@@ -116,12 +142,17 @@ export default function MasterBom({
               </button>
             )}
 
-            <div
+            <DropZone
               className="master-bom-add-btn"
               onClick={
                 hasNativePicker()
                   ? addMasterFile
                   : undefined
+              }
+              onFiles={(files) =>
+                addMasterFileFallback({
+                  target: { files, value: "" },
+                })
               }
             >
               <strong>+ Add BOM File(s)</strong>
@@ -134,7 +165,7 @@ export default function MasterBom({
                   onChange={addMasterFileFallback}
                 />
               )}
-            </div>
+            </DropZone>
           </div>
 
 
@@ -212,9 +243,7 @@ export default function MasterBom({
             {masterSearch.trim() !== "" && !selectedPart && (
               <div className="search-results">
                 {searchMatches.length === 0 ? (
-                  <p className="hint">
-                    No part found matching "{masterSearch}".
-                  </p>
+                  <EmptyState compact icon="search" title={`No part found for "${masterSearch}"`} desc="Try a different keyword or part number." />
                 ) : (
                   searchMatches.map((item) => (
                     <div
@@ -308,54 +337,17 @@ export default function MasterBom({
 
             <hr />
 
-            <div className="tablewrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Part Number</th>
-                    <th>Item Name</th>
-                    <th>Maker</th>
-                    <th>Main/Alt Relation</th>
-
-                    {builtFiles.map((mf) => (
-                      <th key={mf.id}>QPS {mf.model}</th>
-                    ))}
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {masterBOM.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="clickable-row"
-                      onClick={() => {
-                        setSelectedPart(item);
-                        setMasterSearch(item.partNo);
-                      }}
-                    >
-                      <td>
-                        <b>{item.partNo}</b>
-                      </td>
-                      <td>{item.itemName}</td>
-                      <td>{item.maker}</td>
-                      <td>{item.relatedLabel}</td>
-
-                      {builtFiles.map((mf) => {
-                        const usageRow = item.usage.find(
-                          (u) => u.fileId === mf.id
-                        );
-
-                        return (
-                          <td key={mf.id}>
-                            {usageRow ? usageRow.qps : "0"}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <PagedTable
+              columns={masterColumns}
+              rows={masterBOM}
+              rowKey={(item) => item.id}
+              onRowClick={(item) => {
+                setSelectedPart(item);
+                setMasterSearch(item.partNo);
+              }}
+              rowClassNameFn={() => "clickable-row"}
+              pageSize={50}
+            />
           </div>
         </div>
       )}

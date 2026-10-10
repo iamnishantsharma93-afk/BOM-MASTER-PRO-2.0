@@ -87,6 +87,25 @@ export function parseBomRows(rawRows, fallbackName) {
   return { model: modelValue, rows };
 }
 
+// Maps a raw AI-database row (bomData.json shape)
+// into the row shape Master BOM's build logic expects.
+export function mapAiRowToMasterRow(row) {
+  return {
+    partNo: String(
+      row["Item Code(CPN)"] || row["Item Code"] || ""
+    )
+      .trim()
+      .toUpperCase(),
+    itemName: row["Part Name"] || "",
+    itemSpec: row["Part Description"] || "",
+    qps: row["QPS"] || "",
+    uom: row["UOM"] || "",
+    location: row["LOCATION"] || "",
+    maker: row["Maker"] || "",
+    mainAlt: row["Alternate"] || "",
+  };
+}
+
 // =========================================================
 // BUILD MASTER BOM FROM ALL UPLOADED FILES
 // =========================================================

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { exportWorkbook } from "../utils/excelReader.js";
+import { apiGet } from "../utils/api.js";
+import Icon from "./Icon.jsx";
 
 export default function Reports() {
   const [downloading, setDownloading] = useState(false);
@@ -9,8 +11,7 @@ export default function Reports() {
     setDownloading(true);
 
     try {
-      const res = await fetch("http://localhost:3000/api/report/alternates");
-      const data = await res.json();
+      const data = await apiGet("/api/report/alternates");
 
       if (!data.success || !data.rows.length) {
         setCount(0);
@@ -39,13 +40,13 @@ export default function Reports() {
     <div className="master-bom-page">
       <div className="master-bom-header">
         <div>
-          <h2>📊 Reports</h2>
+          <h2 className="card-title-icon"><Icon name="barchart" size={16} /> Reports</h2>
         </div>
       </div>
 
       <div className="report-grid">
         <div className="card report-card">
-          <div className="report-card-icon">🔄</div>
+          <div className="report-card-icon"><Icon name="refresh" size={26} strokeWidth={1.6} /></div>
           <h3>Alternate Report</h3>
           <p className="hint">
             Every item that has an alternate across all BOMs, with the matching main/alt pair and process.

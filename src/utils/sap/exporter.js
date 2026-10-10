@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx/dist/xlsx.full.min.js";
+import XLSX from "xlsx/dist/xlsx.full.min.js";
 
 export const SAP_FIELDS = [
   { key: "Material", header: "Material" },
@@ -6,10 +6,10 @@ export const SAP_FIELDS = [
   { key: "Usage", header: "Usage" },
   { key: "Alternative BOM", header: "Alternative BOM" },
   { key: "Item ID", header: "Item ID" },
-  { key: "Indicator", header: "Indicator" },
   { key: "Item Number", header: "Item Number" },
   { key: "Item Category", header: "Item Category" },
   { key: "Component", header: "Component" },
+  { key: "Indicator", header: "Indicator" },
   { key: "Blank 01", header: "" },
   { key: "Blank 02", header: "" },
   { key: "Blank 03", header: "" },
@@ -23,8 +23,8 @@ export const SAP_FIELDS = [
   { key: "Blank 09", header: "" },
   { key: "Blank 10", header: "" },
   { key: "Alternative Item: Group", header: "Alternative Item: Group" },
-  { key: "Blank 11", header: "" },
-  { key: "Blank 12", header: "" },
+  { key: "Alternative Item: Ranking Order", header: "Alternative Item: Ranking Order" },
+  { key: "Alternative Item: Strategy", header: "Alternative Item: Strategy" },
   { key: "Alternative Item: Usage Probability", header: "Alternative Item: Usage Probability" },
   { key: "Blank 13", header: "" },
   { key: "Blank 14", header: "" },
@@ -32,8 +32,8 @@ export const SAP_FIELDS = [
   { key: "Blank 16", header: "" },
   { key: "Blank 17", header: "" },
   { key: "LOCATION", header: "LOCATION" },
-  { key: "Blank 19", header: "" },
-  { key: "Blank 20", header: "" },
+  { key: "Location 2", header: "Location 2" },
+  { key: "Location 3", header: "Location 3" },
   { key: "Blank 21", header: "" },
   { key: "Blank 22", header: "" },
   { key: "Blank 23", header: "" },
@@ -62,6 +62,37 @@ export function toExportRows(sapRows) {
   );
 }
 
+// One "BOM Header" row per unique Material (first-appearance order),
+// built from the header-level values already present in each SAP row.
+// Columns follow the SAP CS01 header layout:
+//   Material | Plant | Usage | Alternative BOM | Valid-From Date
+//   | BOM Status | (blank) | (blank) | Base Quantity | UOM
+function buildBomHeaderRows(sapRows, validFromDate) {
+  const seen = new Set();
+  const headers = [];
+
+  sapRows.forEach((row) => {
+    const material = row.Material ?? "";
+    if (seen.has(material)) return;
+    seen.add(material);
+
+    headers.push([
+      material,
+      row.Plant ?? "",
+      row.Usage ?? "",
+      row["Alternative BOM"] ?? "",
+      validFromDate,
+      "1",
+      "",
+      "",
+      String(row._baseQty ?? "1"),
+      "EA",
+    ]);
+  });
+
+  return headers;
+}
+
 export function exportSapWorkbook(sapRows, filename) {
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.aoa_to_sheet(toExportMatrix(sapRows));
@@ -79,5 +110,42 @@ export function exportSapWorkbook(sapRows, filename) {
   }));
 
   XLSX.utils.book_append_sheet(workbook, worksheet, "SAP BOM");
+
+  const now = new Date();
+  const validFromDate =
+    `${String(now.getDate()).padStart(2, "0")}.` +
+    `${String(now.getMonth() + 1).padStart(2, "0")}.` +
+    `${now.getFullYear()}`;
+
+  const headerSheet = XLSX.utils.aoa_to_sheet([
+    [
+      "Material",
+      "Plant",
+      "Usage",
+      "Alternative BOM",
+      "Valid-From Date",
+      "BOM Status",
+      "",
+      "",
+      "Base Quantity",
+      "UOM",
+    ],
+    ...buildBomHeaderRows(sapRows, validFromDate),
+  ]);
+  headerSheet["!cols"] = [
+    { wch: 18 },
+    { wch: 8 },
+    { wch: 10 },
+    { wch: 18 },
+    { wch: 15 },
+    { wch: 10 },
+    { wch: 4 },
+    { wch: 4 },
+    { wch: 13 },
+    { wch: 8 },
+  ];
+
+  XLSX.utils.book_append_sheet(workbook, headerSheet, "BOM Header");
+
   XLSX.writeFile(workbook, filename);
 }

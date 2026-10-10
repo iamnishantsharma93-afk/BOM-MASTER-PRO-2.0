@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { incrementCounter, getCounter } from "../utils/activityLog.js";
 import { IS_PREMIUM } from "../config/edition.js";
+import { API_BASE, apiHealth } from "../utils/api.js";
 
 const FREE_CHAT_LIMIT = 5;
 
-const API_URL = "http://localhost:3000/api/chat";
+const API_URL = API_BASE + "/api/chat";
 
 export default function Assistant({ masterBOM = [], builtFiles = [] }) {
   const [messages, setMessages] = useState([
@@ -27,14 +28,8 @@ export default function Assistant({ masterBOM = [], builtFiles = [] }) {
   }, [messages, loading]);
 
   const checkServer = async () => {
-    try {
-      const response = await fetch("http://localhost:3000/", {
-        method: "GET",
-      });
-      setOnline(response.ok);
-    } catch {
-      setOnline(false);
-    }
+    const ok = await apiHealth();
+    setOnline(ok);
   };
 
   useEffect(() => {
@@ -98,7 +93,7 @@ export default function Assistant({ masterBOM = [], builtFiles = [] }) {
         ...prev,
         {
           role: "assistant",
-          text: data.reply || "AI ne koi response nahi diya.",
+          text: data.reply || "The AI did not return a response.",
         },
       ]);
     } catch (error) {
@@ -108,9 +103,9 @@ export default function Assistant({ masterBOM = [], builtFiles = [] }) {
         {
           role: "assistant",
           text:
-            "Assistant server se connect nahi ho pa raha.\n\n" +
-            "Please MY-PERSONAL-AI backend check karo:\n" +
-            "http://localhost:3000\n\n" +
+            "Could not connect to the assistant server.\n\n" +
+            "Please check the AI backend at:\n" +
+            API_BASE + "\n\n" +
             `Error: ${error.message}`,
         },
       ]);

@@ -1,3 +1,5 @@
+import PagedTable from "./PagedTable.jsx";
+
 export default function ResultTable({
   results,
   counts,
@@ -11,306 +13,140 @@ export default function ResultTable({
   PARAMS,
   selectedAdditional,
 }) {
-  const cell = (
-    value,
-    changed,
-    extraClass = ""
-  ) => (
-    <td
-      className={`${changed ? "changed-cell" : ""} ${extraClass}`}
-    >
-      {value}
-    </td>
-  );
+  const columns = [
+    {
+      key: "partNumber",
+      label: "Part Number",
+      render: (r) => r.partNumber,
+    },
+    {
+      key: "qps1",
+      label: "QPS File 1",
+      className: (r) => (r.changes.qps ? "changed-cell" : ""),
+      render: (r) => r.qpsFile1,
+    },
+    {
+      key: "qps2",
+      label: "QPS File 2",
+      className: (r) => (r.changes.qps ? "changed-cell" : ""),
+      render: (r) => r.qpsFile2,
+    },
+    {
+      key: "loc1",
+      label: "Location File 1",
+      className: (r) =>
+        `location-cell${r.changes.location ? " changed-cell" : ""}`,
+      render: (r) => r.locationFile1,
+    },
+    {
+      key: "loc2",
+      label: "Location File 2",
+      className: (r) =>
+        `location-cell${r.changes.location ? " changed-cell" : ""}`,
+      render: (r) => r.locationFile2,
+    },
+    ...selectedAdditional.map((k) => ({
+      key: k,
+      label: `${PARAMS.find((p) => p[0] === k)?.[1] || k} 1 / 2`,
+      className: (r) => (r.changes[k] ? "changed-cell" : ""),
+      render: (r) => (
+        <>
+          <div>{r.extra?.[k + "File1"]}</div>
+          <hr />
+          <div>{r.extra?.[k + "File2"]}</div>
+        </>
+      ),
+    })),
+    {
+      key: "status",
+      label: "Status",
+      render: (r) => (
+        <span
+          className={
+            "status " +
+            (r.status === "Same"
+              ? "same"
+              : r.status.startsWith("Only")
+              ? "missing"
+              : "changed")
+          }
+        >
+          {r.status}
+        </span>
+      ),
+    },
+    {
+      key: "remark",
+      label: "Remark",
+      className: "remark",
+      render: (r) => r.remarks.join(" | "),
+    },
+  ];
+
+  if (results.length === 0) {
+    return null;
+  }
 
   return (
     <>
-        {results.length >
-          0 && (
-          <>
-            <section className="card">
-              <h2>
-                03. Difference
-                Summary Dashboard
-              </h2>
+      <section className="card">
+        <h2>03. Difference Summary Dashboard</h2>
 
-              <div className="stats">
-                {Object.entries(
-                  counts
-                ).map(
-                  ([k, v]) => (
-                    <button
-                      key={k}
-                      className={
-                        filter ===
-                        k
-                          ? "stat active"
-                          : "stat"
-                      }
-                      onClick={() =>
-                        setFilter(
-                          k
-                        )
-                      }
-                    >
-                      <span>
-                        {k}
-                      </span>
+        <div className="stats">
+          {Object.entries(counts).map(([k, v]) => (
+            <button
+              key={k}
+              className={filter === k ? "stat active" : "stat"}
+              onClick={() => setFilter(k)}
+            >
+              <span>{k}</span>
+              <strong>{v}</strong>
+            </button>
+          ))}
+        </div>
+      </section>
 
-                      <strong>
-                        {v}
-                      </strong>
-                    </button>
-                  )
-                )}
-              </div>
-            </section>
+      <section className="card">
+        <div className="toolbar">
+          <div>
+            <h2>04. Comparison Results</h2>
+            <p>
+              {filtered.length} of {results.length} records shown
+            </p>
+          </div>
 
-            {/* =====================================
-                COMPARISON RESULTS
-            ====================================== */}
-            <section className="card">
-              <div className="toolbar">
-                <div>
-                  <h2>
-                    04. Comparison
-                    Results
-                  </h2>
+          <input
+            className="search"
+            placeholder="Search Part Number, Location, QPS, MPN…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
 
-                  <p>
-                    {
-                      filtered.length
-                    }{" "}
-                    of{" "}
-                    {
-                      results.length
-                    }{" "}
-                    records shown
-                  </p>
-                </div>
+          <div className="exports">
+            <button onClick={() => exportRows(results, "BOM_Master_Pro_Full.xlsx")}>
+              Export Full
+            </button>
 
-                <input
-                  className="search"
-                  placeholder="Search Part Number, Location, QPS, MPN…"
-                  value={
-                    search
-                  }
-                  onChange={(e) =>
-                    setSearch(
-                      e.target
-                        .value
-                    )
-                  }
-                />
+            <button onClick={() => exportRows(filtered, "BOM_Master_Pro_Filtered.xlsx")}>
+              Export Filtered
+            </button>
 
-                <div className="exports">
-                  <button
-                    onClick={() =>
-                      exportRows(
-                        results,
-                        "BOM_Master_Pro_Full.xlsx"
-                      )
-                    }
-                  >
-                    Export Full
-                  </button>
+            <button
+              className="primary"
+              onClick={() => exportRows(changed, "BOM_Master_Pro_Changes_Only.xlsx")}
+            >
+              Export Changes Only
+            </button>
+          </div>
+        </div>
 
-                  <button
-                    onClick={() =>
-                      exportRows(
-                        filtered,
-                        "BOM_Master_Pro_Filtered.xlsx"
-                      )
-                    }
-                  >
-                    Export Filtered
-                  </button>
-
-                  <button
-                    className="primary"
-                    onClick={() =>
-                      exportRows(
-                        changed,
-                        "BOM_Master_Pro_Changes_Only.xlsx"
-                      )
-                    }
-                  >
-                    Export Changes
-                    Only
-                  </button>
-                </div>
-              </div>
-
-              <div className="tablewrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>
-                        Part Number
-                      </th>
-
-                      <th>
-                        QPS File 1
-                      </th>
-
-                      <th>
-                        QPS File 2
-                      </th>
-
-                      <th>
-                        Location File 1
-                      </th>
-
-                      <th>
-                        Location File 2
-                      </th>
-
-                      {selectedAdditional.map(
-                        (k) => (
-                          <th
-                            key={k}
-                          >
-                            {
-                              PARAMS.find(
-                                (
-                                  p
-                                ) =>
-                                  p[0] ===
-                                  k
-                              )?.[1]
-                            }{" "}
-                            1 / 2
-                          </th>
-                        )
-                      )}
-
-                      <th>
-                        Status
-                      </th>
-
-                      <th>
-                        Remark
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {filtered.map(
-                      (r) => (
-                        <tr
-                          key={
-                            r.id
-                          }
-                        >
-                          {cell(
-                            r.partNumber,
-                            false
-                          )}
-
-                          {cell(
-                            r.qpsFile1,
-                            r
-                              .changes
-                              .qps
-                          )}
-
-                          {cell(
-                            r.qpsFile2,
-                            r
-                              .changes
-                              .qps
-                          )}
-
-                          {cell(
-                            r.locationFile1,
-                            r
-                              .changes
-                              .location,
-                            "location-cell"
-                          )}
-
-                          {cell(
-                            r.locationFile2,
-                            r
-                              .changes
-                              .location,
-                            "location-cell"
-                          )}
-
-                          {selectedAdditional.map(
-                            (k) => (
-                              <td
-                                key={
-                                  k
-                                }
-                                className={
-                                  r
-                                    .changes[
-                                    k
-                                  ]
-                                    ? "changed-cell"
-                                    : ""
-                                }
-                              >
-                                <div>
-                                  {
-                                    r
-                                      .extra?.[
-                                      k +
-                                        "File1"
-                                    ]
-                                  }
-                                </div>
-
-                                <hr />
-
-                                <div>
-                                  {
-                                    r
-                                      .extra?.[
-                                      k +
-                                        "File2"
-                                    ]
-                                  }
-                                </div>
-                              </td>
-                            )
-                          )}
-
-                          <td>
-                            <span
-                              className={
-                                "status " +
-                                (r.status ===
-                                "Same"
-                                  ? "same"
-                                  : r.status.startsWith(
-                                      "Only"
-                                    )
-                                  ? "missing"
-                                  : "changed")
-                              }
-                            >
-                              {
-                                r.status
-                              }
-                            </span>
-                          </td>
-
-                          <td className="remark">
-                            {r.remarks.join(
-                              " | "
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </>
-        )}
+        <PagedTable
+          columns={columns}
+          rows={filtered}
+          rowKey={(r) => r.id}
+          pageSize={50}
+        />
+      </section>
     </>
   );
 }
